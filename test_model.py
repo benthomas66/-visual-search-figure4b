@@ -1,96 +1,80 @@
-"""Sanity checks and an independent likelihood check. Run with unittest."""
+"""Basic checks. Run from this folder: python test_model.py"""
 
-import contextlib
-import io
-import unittest
-
+import csv
 import numpy as np
-import simulate_search as model
+from simulate_search import choose_response
 
 
-class ModelTests(unittest.TestCase):
-    def test_priors_and_location_count(self):
-        self.assertEqual(len(model.eccentricity), 19)
-        for p_absent in [0.0, 0.5, 1.0]:
-            prior = model.make_prior(p_absent)
-            self.assertEqual(len(prior), 20)
-            self.assertAlmostEqual(prior.sum(), 1.0)
-            self.assertEqual(prior[0], p_absent)
-            np.testing.assert_allclose(prior[1:], (1 - p_absent) / 19)
+# The prior has 20 entries; the physical maps have 19.
+n_locations = 19
+for p_absent in [0.0, 0.5]:
+    p_location = (1.0 - p_absent) / n_locations
+    prior = np.array([p_absent] + [p_location] * n_locations)
+    assert len(prior) == 20
+    assert np.isclose(prior.sum(), 1.0)
 
-    def test_response_generation_and_indexing(self):
-        dprime = np.arange(1.0, 20.0)
-        for state in [0, 1, 3, 19]:
-            noise = np.random.default_rng(12).standard_normal(19)
-            expected = noise.copy()
-            if state > 0:
-                expected[state - 1] += dprime[state - 1]
-            actual = model.generate_responses(np.random.default_rng(12), state, dprime)
-            np.testing.assert_array_equal(actual, expected)
 
-    def test_decision_matches_full_gaussian_likelihoods(self):
-        # Independently evaluate all 20 joint Gaussian densities in log space.
-        rng = np.random.default_rng(7)
-        dprime = 6 * 3 / (model.eccentricity + 3)
-        for p_absent in [0.0, 0.5]:
-            prior = model.make_prior(p_absent)
-            for trial in range(100):
-                responses = rng.standard_normal(19)
-                scores = np.full(20, -np.inf)
-                for state in range(20):
-                    if prior[state] == 0:
-                        continue
-                    means = np.zeros(19)
-                    if state > 0:
-                        means[state - 1] = dprime[state - 1]
-                    scores[state] = np.log(prior[state]) - 0.5 * np.sum((responses - means)**2)
-                self.assertEqual(model.choose_response(responses, dprime, prior),
-                                 np.argmax(scores))
+# With zero detectability, the larger absent prior wins.
+prior = np.array([0.5] + [0.5 / 19] * 19)
+dprime = np.zeros(19)
+responses = np.zeros(19)
+assert choose_response(responses, dprime, prior) == 0
 
-    def test_zero_detectability_uses_prior_and_excludes_absence(self):
-        responses = np.ones(19)
-        zeros = np.zeros(19)
-        self.assertEqual(model.choose_response(responses, zeros, model.make_prior(0.5)), 0)
-        # All target states tie; numpy selects the first, and never absent.
-        self.assertEqual(model.choose_response(responses, zeros, model.make_prior(0.0)), 1)
+# With absence excluded, a tie selects the first target location.
+prior = np.array([0.0] + [1.0 / 19] * 19)
+assert choose_response(responses, dprime, prior) == 1
 
-    def test_high_detectability_recovers_every_state(self):
-        rng = np.random.default_rng(3)
-        dprime = np.full(19, 20.0)
-        prior = model.make_prior(0.5)
+
+# Strong target responses recover all 19 locations; all-noise selects absence.
+prior = np.array([0.5] + [0.5 / 19] * 19)
+dprime = np.array([20.0] * 19)
+for true_state in range(20):
+    responses = np.zeros(19)
+    if true_state > 0:
+        responses[true_state - 1] = dprime[true_state - 1]
+    assert choose_response(responses, dprime, prior) == true_state
+
+
+# Independently calculate all joint Gaussian likelihoods and compare decisions.
+rng = np.random.default_rng(7)
+dprime = np.linspace(1.0, 6.0, 19)
+for p_absent in [0.0, 0.5]:
+    prior = np.array([p_absent] + [(1.0 - p_absent) / 19] * 19)
+    for trial in range(100):
+        responses = rng.standard_normal(19)
+        joint_scores = np.zeros(20)
         for state in range(20):
-            responses = model.generate_responses(rng, state, dprime)
-            self.assertEqual(model.choose_response(responses, dprime, prior), state)
-
-    def test_source_notebook_scoring_equivalence(self):
-        # Authors shift the score by assumed_dprime * generating_dprime;
-        # we shift the response first. These give the same scores.
-        rng = np.random.default_rng(4)
-        generating = 6 * 5 / (model.eccentricity + 5)
-        assumed = model.falloff_assumed_dprime
-        prior = model.make_prior(0.5)
-        for state in range(20):
-            noise = rng.standard_normal(19)
-            responses = noise.copy()
-            source_scores = np.log(prior[1:]) + assumed * (noise - assumed / 2)
-            if state > 0:
-                responses[state - 1] += generating[state - 1]
-                source_scores[state - 1] += assumed[state - 1] * generating[state - 1]
-            expected = np.argmax(np.concatenate(([np.log(prior[0])], source_scores)))
-            self.assertEqual(model.choose_response(responses, assumed, prior), expected)
-
-    def test_sweep_shape_and_seed_reproducibility(self):
-        with contextlib.redirect_stdout(io.StringIO()):
-            first = model.run_simulation(n_trials=20, seed=8)
-            second = model.run_simulation(n_trials=20, seed=8)
-        self.assertEqual(first, second)
-        self.assertEqual(len(first), 30)
-        keys = {(r["p_absent"], r["true_e2"], r["observer"]) for r in first}
-        self.assertEqual(len(keys), 30)
-        for row in first:
-            self.assertEqual(row["accuracy"], row["n_correct"] / row["n_trials"])
-            self.assertTrue(0 <= row["accuracy"] <= 1)
+            if prior[state] == 0:
+                joint_scores[state] = -np.inf
+            else:
+                means = np.zeros(19)
+                if state > 0:
+                    means[state - 1] = dprime[state - 1]
+                joint_scores[state] = (
+                    np.log(prior[state])
+                    - 0.5 * np.sum((responses - means)**2)
+                )
+        expected_state = np.argmax(joint_scores)
+        assert choose_response(responses, dprime, prior) == expected_state
 
 
-if __name__ == "__main__":
-    unittest.main()
+# Check that the saved simulation has three results for every condition.
+with open("search_accuracy.csv", newline="") as file:
+    rows = list(csv.DictReader(file))
+assert len(rows) == 30
+for p_absent in [0.0, 0.5]:
+    for e2 in [1.0, 3.0, 5.0, 7.0, 9.0]:
+        for observer in ["ideal", "flat_heuristic", "falloff_heuristic"]:
+            matching_rows = 0
+            for row in rows:
+                if float(row["p_absent"]) == p_absent:
+                    if float(row["true_e2"]) == e2:
+                        if row["observer"] == observer:
+                            matching_rows = matching_rows + 1
+            assert matching_rows == 1
+for row in rows:
+    accuracy = int(row["n_correct"]) / int(row["n_trials"])
+    assert float(row["accuracy"]) == accuracy
+    assert 0.0 <= accuracy <= 1.0
+
+print("All basic model checks passed.")

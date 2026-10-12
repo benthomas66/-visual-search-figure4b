@@ -178,7 +178,7 @@ per observer under the selected prior.
 |---|---|
 | Absent prior | `prior[0]` |
 | Prior for $H_k$ | `prior[k]` |
-| Physical location $k$ detectability | `true_dprime[k - 1]` |
+| Physical location $k$ detectability | `generating_dprime[k - 1]` |
 | Physical location $k$ response | `responses[k - 1]` |
 | Score for $H_k$, including absence | `scores[k]` |
 
