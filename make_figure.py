@@ -1,62 +1,66 @@
-"""Read search_accuracy.csv and plot the six accuracy curves.
+"""Plot search_accuracy.csv as figure4b_reproduction.png.
 
-Run from this folder: python make_figure.py
+Run after simulate_search.py:  python make_figure.py
 """
 
 import csv
-import os
 import matplotlib.pyplot as plt
 
 
 with open("search_accuracy.csv", newline="") as file:
-    reader = csv.DictReader(file)
-    rows = list(reader)
+    rows = list(csv.DictReader(file))
 
-observer_names = ["ideal", "flat_heuristic", "falloff_heuristic"]
-observer_labels = ["Ideal", "Flat heuristic", "Declining heuristic"]
-line_styles = ["-", ":", "--"]
-colors = ["black", "tab:blue", "tab:orange"]
-prior_values = [0.5, 0.0]
 
-figure, axes = plt.subplots(1, 2, figsize=(10, 4.5), sharey=True)
+def get_curve(p_absent, observer):
+    """Return the e2 values and accuracies for one observer and prior."""
+    e2_values = []
+    accuracies = []
+    # Rows are already in increasing e2 order
+    for row in rows:
+        if float(row["p_absent"]) == p_absent and row["observer"] == observer:
+            e2_values.append(float(row["true_e2"]))
+            accuracies.append(float(row["accuracy"]))
+    return e2_values, accuracies
 
-for panel_index in range(2):
-    p_absent = prior_values[panel_index]
-    axis = axes[panel_index]
 
-    for observer_index in range(3):
-        observer_name = observer_names[observer_index]
-        e2_values = []
-        accuracy_values = []
+figure, panels = plt.subplots(1, 2, figsize=(10, 4.5), sharey=True)
+left_panel = panels[0]
+right_panel = panels[1]
 
-        # The simulator saves each observer's points in increasing e2 order.
-        for row in rows:
-            if float(row["p_absent"]) == p_absent:
-                if row["observer"] == observer_name:
-                    e2_values.append(float(row["true_e2"]))
-                    accuracy_values.append(float(row["accuracy"]))
+# Left panel: p0 = 0.5
+e2, accuracy = get_curve(0.5, "ideal")
+left_panel.plot(e2, accuracy, label="Ideal",
+                color="black", linestyle="-", marker="o")
+e2, accuracy = get_curve(0.5, "flat_heuristic")
+left_panel.plot(e2, accuracy, label="Flat heuristic",
+                color="tab:blue", linestyle=":", marker="o")
+e2, accuracy = get_curve(0.5, "falloff_heuristic")
+left_panel.plot(e2, accuracy, label="Fall-off heuristic",
+                color="tab:orange", linestyle="--", marker="o")
+left_panel.set_title("Absent prior p0 = 0.5")
+left_panel.set_ylabel("Proportion correct")
 
-        axis.plot(
-            e2_values,
-            accuracy_values,
-            label=observer_labels[observer_index],
-            linestyle=line_styles[observer_index],
-            color=colors[observer_index],
-            marker="o"
-        )
+# Right panel: p0 = 0
+e2, accuracy = get_curve(0.0, "ideal")
+right_panel.plot(e2, accuracy, label="Ideal",
+                 color="black", linestyle="-", marker="o")
+e2, accuracy = get_curve(0.0, "flat_heuristic")
+right_panel.plot(e2, accuracy, label="Flat heuristic",
+                 color="tab:blue", linestyle=":", marker="o")
+e2, accuracy = get_curve(0.0, "falloff_heuristic")
+right_panel.plot(e2, accuracy, label="Fall-off heuristic",
+                 color="tab:orange", linestyle="--", marker="o")
+right_panel.set_title("Absent prior p0 = 0.0")
+right_panel.legend()
 
-    axis.set_title("Absent prior p0 = " + str(p_absent))
-    axis.set_xlabel("Generating e2 (degrees)")
-    axis.set_xticks([1, 3, 5, 7, 9])
-    axis.set_ylim(0.2, 1.0)
-    axis.grid(alpha=0.2)
+for panel in panels:
+    panel.set_xlabel("Generating e2 (degrees)")
+    panel.set_xticks([1, 3, 5, 7, 9])
+    panel.set_ylim(0.2, 1.0)
+    panel.grid(alpha=0.2)
 
-axes[0].set_ylabel("Proportion correct")
-axes[1].legend()
-figure.suptitle("Figure 4b reproduction: ideal and heuristic observers")
+figure.suptitle("Figure 4b reproduction: ideal and heuristic searchers")
 figure.tight_layout()
-
-os.makedirs("figures", exist_ok=True)
-figure.savefig("figures/figure4b_reproduction.png", dpi=300)
+figure.savefig("figure4b_reproduction.png", dpi=300)
 plt.close(figure)
-print("Saved figures/figure4b_reproduction.png")
+print("Saved figure4b_reproduction.png")

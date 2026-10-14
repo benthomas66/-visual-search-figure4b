@@ -1,203 +1,204 @@
-# Model and decision rule
+# Model notes
 
-This project implements the single-fixation, independent Gaussian-evidence
-comparison behind Figure 4b of Zhang & Geisler (2025). It simulates sensory
-responses, not images or eye movements.
+These notes derive the decision rule used in `simulate_search.py` and
+explain how the Figure 4b simulation is set up. The model works with
+simulated sensory responses (one number per location), not images.
 
-## 1. Locations, hypotheses, and priors
+## 1. Locations, states, and priors
 
-There are 19 physical locations: one at 0°, six at 4°, six at approximately
-6.9295°, and six at 8°. Let their eccentricities be $e_1,\ldots,e_{19}$.
+There are 19 possible target locations on a hexagonal grid (Figure 4e)
+with 4° spacing: one at 0°, six at 4°, six at about 6.93°, and six at 8°.
+Call their eccentricities $e_1,\ldots,e_{19}$. The code uses 6.9295°,
+matching the value in the authors' notebooks.
 
-The state $H_0$ means target absent. State $H_k$, for $k=1,\ldots,19$,
-means target present at location $k$. At most one target is present.
-
-For either $p_0=0$ or $p_0=0.5$,
-
-$$
-P(H_0)=p_0,\qquad P(H_k)=p_k=\frac{1-p_0}{19}.
-$$
-
-These 20 probabilities sum to one. The absent hypothesis is not a physical
-location and does not have its own sensory response.
-
-## 2. Generating the sensory evidence
-
-The **generating map** supplies the detectability at each physical location:
+There are 20 possible states. $H_0$ means the target is absent.
+$H_k$, for $k=1,\ldots,19$, means the target is at location $k$.
+At most one target is present. The priors are
 
 $$
-d'_k=6\frac{e_2}{e_k+e_2},\qquad e_2\in\{1,3,5,7,9\}.
+P(H_0)=p_0,\qquad P(H_k)=p_k=\frac{1-p_0}{19},
 $$
 
-Fixing $e_2$ specifies one map, with four distinct detectabilities assigned
-across 19 locations. Central detectability is always 6. At eccentricity
-$e_2$, detectability is half its central value.
+with $p_0=0$ or $p_0=0.5$. Absence is a state, not a location, so it has
+no sensory response of its own.
 
-On each trial, draw the state $K$ from the prior and draw 19 independent
-standard-normal noise values $Z_k$. Generate
+## 2. Generating the responses
 
-$$
-R'_k=Z_k+\mathbf{1}\{K=k\}d'_k,\qquad Z_k\sim N(0,1).
-$$
-
-Thus, under $H_0$, every response is noise only. Under $H_j$, only response
-$j$ has mean $d'_j$; all other responses have mean zero. Conditional noise
-is independent across locations and trials. The map stays fixed within a
-condition. The observer receives the response vector, not the state label.
-
-## 3. A local Gaussian likelihood ratio
-
-For a location with detectability $d'$, the two densities are
+The **generating map** sets the true detectability $d'$ at each location
+(Equation 6 in the paper):
 
 $$
-f_0(r)=\frac{1}{\sqrt{2\pi}}\exp(-r^2/2),\qquad
-f_1(r)=\frac{1}{\sqrt{2\pi}}\exp(-(r-d')^2/2).
+d'_k=d'_{\max}\,\frac{e_2}{e_k+e_2},\qquad d'_{\max}=6,\quad e_2\in\{1,3,5,7,9\}.
 $$
 
-Their log likelihood ratio is
+$d'$ equals 6 at the center and falls to half that at eccentricity $e_2$.
+Small $e_2$ means visibility drops off quickly away from the center.
+
+On each trial, draw the true state $K$ from the prior, then draw 19
+independent standard normal values $Z_k$. The responses are
+
+$$
+R'_k=Z_k+\mathbf{1}\{K=k\}\,d'_k,\qquad Z_k\sim N(0,1).
+$$
+
+So when the target is absent, every response is pure noise. When the
+target is at location $j$, response $j$ has mean $d'_j$ and every other
+response has mean 0. All responses have variance 1 and are independent.
+The observer sees the 19 responses, not the true state.
+
+## 3. Likelihood ratio at one location
+
+At a single location with detectability $d'$, the response density is
+
+$$
+f_0(r)=\frac{1}{\sqrt{2\pi}}e^{-r^2/2}\ \ \text{(no target)},\qquad
+f_1(r)=\frac{1}{\sqrt{2\pi}}e^{-(r-d')^2/2}\ \ \text{(target)}.
+$$
+
+The log likelihood ratio is
 
 $$
 \begin{aligned}
 \ln\frac{f_1(r)}{f_0(r)}
-&=-\frac12(r-d')^2+\frac12r^2\\
-&=-\frac12(r^2-2d'r+(d')^2)+\frac12r^2\\
-&=d'r-\frac12(d')^2\\
-&=d'\left(r-\frac{d'}2\right).
+&=-\tfrac12(r-d')^2+\tfrac12r^2\\
+&=-\tfrac12\left(r^2-2d'r+d'^2\right)+\tfrac12r^2\\
+&=d'r-\tfrac12d'^2\\
+&=d'\left(r-\tfrac12d'\right).
 \end{aligned}
 $$
 
-The quadratic term is part of the exact likelihood ratio, not an invented
-penalty. For $d'>0$, a response above $d'/2$ favors the local target
-distribution; a response below it favors the noise distribution.
-For $d'=6$, the densities are equal at $r=3$ and the log ratio is zero.
-This local balance is not the final search decision boundary: priors and
-competing locations also matter. When $d'=0$, the two distributions coincide
-and the local likelihood ratio is one for every response.
+The last two lines are the same expression, expanded and factored. The
+paper writes the expanded form in Equation 1 and, for a heuristic map
+$\widehat d'$, the factored form in Equation 5. The $-\tfrac12d'^2$ term comes straight out of the Gaussian
+densities. A response above $d'/2$ favors "target here"; below $d'/2$
+favors "no target here."
 
-## 4. From local evidence to the 20-hypothesis decision
+## 4. Combining 19 locations with Bayes' theorem
 
-Write $\mathbf r=(r_1,\ldots,r_{19})$ and let $\phi$ denote the standard
-normal density. Conditional independence gives
+Write $\mathbf r=(r_1,\ldots,r_{19})$ and let $\phi$ be the standard normal
+density. Because the responses are independent,
 
 $$
-f(\mathbf r\mid H_0)=\prod_{i=1}^{19}\phi(r_i),
-$$
-
-$$
+f(\mathbf r\mid H_0)=\prod_{i=1}^{19}\phi(r_i),\qquad
 f(\mathbf r\mid H_k)=\phi(r_k-d'_k)\prod_{i\ne k}\phi(r_i).
 $$
 
-Dividing the second expression by the first cancels every non-target
-factor, leaving the local likelihood ratio at location $k$.
-Bayes' theorem gives
+Dividing, every factor except location $k$ cancels:
+
+$$
+\frac{f(\mathbf r\mid H_k)}{f(\mathbf r\mid H_0)}
+=\frac{\phi(r_k-d'_k)}{\phi(r_k)}
+=\exp\!\left(d'_kr_k-\tfrac12d'^2_k\right).
+$$
+
+Bayes' theorem gives the posterior of each state:
 
 $$
 P(H_k\mid\mathbf r)=
-\frac{p_k f(\mathbf r\mid H_k)}{
-\sum_{j=0}^{19}p_j f(\mathbf r\mid H_j)}.
+\frac{p_k\,f(\mathbf r\mid H_k)}{\sum_{j=0}^{19}p_j\,f(\mathbf r\mid H_j)}.
 $$
 
-The denominator is common to every hypothesis. Taking logs and subtracting
-the common term $\ln f(\mathbf r\mid H_0)$ therefore preserves the ranking:
+The denominator is the same for every state, and so is
+$f(\mathbf r\mid H_0)$. Dividing by both and taking logs does not change
+which state is largest. That leaves one score per state:
 
 $$
-S_0=\ln p_0,\qquad
-S_k=\ln p_k+d'_k r_k-\frac12(d'_k)^2.
+S_0=\ln p_0,\qquad S_k=\ln p_k+d'_kr_k-\tfrac12d'^2_k\quad(k=1,\ldots,19).
 $$
 
-The ideal observer chooses
+The observer picks the state with the highest score:
 
 $$
-\widehat K=\operatorname*{arg\,max}_{k\in\{0,\ldots,19\}}S_k.
+\widehat K=\arg\max_{k\in\{0,\ldots,19\}}S_k.
 $$
 
-Selecting the most probable state maximizes the conditional probability of
-a correct answer under equal cost for every incorrect state (zero-one loss).
-Here, a present-trial answer is correct only if it identifies the exact
-target location. An absent-trial answer is correct only if it chooses 0.
+This is Equation 1 of the paper. Picking the most probable state gives
+the highest chance of being correct. A decision is correct only if it is
+the exact true state: the right location when a target is present, or
+"absent" when it is not.
 
-When $p_0=0$, assign $S_0=-\infty$ so absence cannot be selected. The
-all-noise density remains a valid mathematical reference even when its
-prior is zero. No posterior normalization is needed to find the maximum.
+## 5. The absent state
 
-The authors' notebooks sometimes subtract $\ln p_0$ from all scores when
-$p_0>0$. That constant shift leaves the decision unchanged. We use the
-unnormalized log scores above in both prior conditions.
+The absent state has no response, and its likelihood ratio with itself
+is 1, so its score is just $\ln p_0$. (The paper writes this as
+$d'_0=0$ in Equation 1.) When $p_0=0$, the code sets $S_0=-\infty$ so
+"absent" is never chosen. The authors' notebooks also subtract $\ln p_0$
+from every score when $p_0>0$; shifting all scores by the same amount
+does not change the decision.
 
-## 5. Fixed heuristic maps
+## 6. Generating versus assumed maps
 
-The **assumed map** supplies the values an observer puts into the scoring
-rule. The ideal observer uses the generating map. The two heuristics use
-
-$$
-\widehat d'_{k,\mathrm{flat}}=3.9,\qquad
-\widehat d'_{k,\mathrm{declining}}=6.9\frac{7}{e_k+7}.
-$$
-
-Their scores are
+The **generating map** produces the responses. The **assumed map** is
+what an observer plugs into the score. Writing the assumed values as
+$\widehat d'_k$:
 
 $$
 \widehat S_0=\ln p_0,\qquad
-\widehat S_k=\ln p_k+\widehat d'_k r_k-
-\frac12(\widehat d'_k)^2.
+\widehat S_k=\ln p_k+\widehat d'_k\,r_k-\tfrac12\widehat d'^2_k .
 $$
 
-Both retain the correct prior. Both assumed maps stay fixed across the
-generating $e_2$ sweep. Neither changes how responses are generated.
-All three observers evaluate the same response vector on each trial.
-The heuristic scores have a likelihood interpretation under the assumed
-model; they are generally not the log posterior scores under the generating model.
-
-For example, with generating $e_2=1$ and a target at 4°, generating
-detectability is 1.2. A noise draw of 0.8 yields a response of 2.0.
-The ideal, flat, and declining observers all receive 2.0, but score it
-using detectabilities 1.2, 3.9, and approximately 4.39 respectively.
-
-## 6. Simulation structure and the 30 results
-
-For each of two priors and each of five generating maps, generate 10,000
-trials and count correct decisions separately for each observer:
-
-$$
-\widehat A=\frac{\text{number of correct state decisions}}{10000}.
-$$
-
-There are 10 conditions, 100,000 generated trials, 300,000 observer
-decisions, and 30 accuracy estimates. Plotting accuracy against generating
-$e_2$ gives six curves, each containing five points. The figure uses two
-panels by prior; the original Figure 4b overlays both priors in one panel.
-
-A visibility-map curve plots detectability against eccentricity with $e_2$
-fixed. An accuracy curve plots accuracy against $e_2$ with observer and
-prior fixed. One generating visibility map supplies one accuracy point
-per observer under the selected prior.
-
-## 7. Python indexing and reproducibility
-
-| Mathematical meaning | Python entry |
+| Observer | Assumed map $\widehat d'_k$ |
 |---|---|
-| Absent prior | `prior[0]` |
-| Prior for $H_k$ | `prior[k]` |
-| Physical location $k$ detectability | `generating_dprime[k - 1]` |
-| Physical location $k$ response | `responses[k - 1]` |
-| Score for $H_k$, including absence | `scores[k]` |
+| Ideal | the generating map, $6\,e_2/(e_k+e_2)$ |
+| Flat heuristic | $3.9$ at every location |
+| Fall-off heuristic | $6.9\cdot 7/(e_k+7)$ |
 
-One NumPy generator is initialized with seed 0 before the sweep. Changing
-the seed or condition order changes the Monte Carlo realization. Trials
-are shared across observers within a condition, not across different
-conditions. Exact score ties select the first index through `np.argmax`.
-Ties have probability zero for the main continuous, positive-detectability
-conditions; zero-detectability tests deliberately exercise ties.
+The two heuristic maps stay the same in all 10 conditions, while the
+generating map changes with $e_2$. All three observers use the correct
+prior and score the same 19 responses on each trial. Only the ideal
+observer's scores are true log posteriors (up to a shared constant);
+the heuristic scores would be correct only if their assumed map were true.
 
-Finite-sample accuracy can put a heuristic slightly above the ideal on a
-particular run. This does not establish a higher expected accuracy.
+Example: with generating $e_2=1$ and a target at 4°, the true $d'$ is
+$6\cdot1/5=1.2$. A noise draw of 0.8 gives a response of 2.0. All three
+observers see 2.0, but weight it with 1.2, 3.9, and
+$6.9\cdot7/11\approx4.39$.
+
+## 7. The sweep and the 30 accuracies
+
+A condition is one absent prior (0 or 0.5) and one generating $e_2$
+(1, 3, 5, 7, or 9), giving 10 conditions. Each condition runs 10,000
+trials, and each observer's accuracy is
+
+$$
+\widehat A=\frac{\text{number of correct decisions}}{10{,}000}.
+$$
+
+10 conditions × 3 observers = 30 accuracy estimates. In the figure,
+each curve fixes one observer and one prior and plots accuracy against
+$e_2$: two panels (one per prior) with three curves each, so 6 curves
+with 5 points each. The three accuracies in each condition are within
+0.03 of each other, so some curves overlap.
+
+Each estimate has a Monte Carlo standard error of about
+$\sqrt{A(1-A)/10{,}000}\le0.005$, so a heuristic can land slightly above
+the ideal observer in one run without being better on average.
+
+## 8. Indexing in the code
+
+| Meaning | Python |
+|---|---|
+| Absent prior $p_0$ | `prior[0]` |
+| Prior for location $k$ | `prior[k]` |
+| Response at location $k$ | `responses[k - 1]` |
+| $d'$ at location $k$ | `generating_dprime[k - 1]` |
+| Score for state $k$ (0 = absent) | `scores[k]` |
+
+States run 0–19, but the response and map arrays have 19 entries
+(Python indices 0–18), hence the `k - 1`. `np.argmax` returns the first
+index if scores tie; ties essentially never happen with continuous
+responses.
+
+One random generator (seed 0) is created before the sweep, so every
+condition gets different trials, and the three observers within a
+condition share the same trials.
 
 ## References
 
-Zhang, A., & Geisler, W. S. (2025). *Optimal visual search with highly
-heuristic decision rules*. Journal of Vision, 25(4), 5.
-[doi:10.1167/jov.25.4.5](https://doi.org/10.1167/jov.25.4.5).
+Zhang, A., & Geisler, W. S. (2025). Optimal visual search with highly
+heuristic decision rules. *Journal of Vision, 25*(4), 5.
+<https://doi.org/10.1167/jov.25.4.5>
 
-[Original source repository](https://github.com/anqi-j/supraoptimal-covert-search),
-especially `simulation/Search Scan Ideal.ipynb` and
+Original code: <https://github.com/anqi-j/supraoptimal-covert-search>,
+`simulation/Search Scan Ideal.ipynb` and
 `simulation/Search Scan Heuristic.ipynb`.
