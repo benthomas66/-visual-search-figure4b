@@ -1,4 +1,3 @@
-[model_notes.md](https://github.com/user-attachments/files/33414590/model_notes.md)
 # Model notes
 
 Figure 4b: one fixation, 19 locations, at most one target. Eccentricities:
@@ -20,7 +19,7 @@ $$
 
 $$
 P(K=k)=p_k,\qquad Z_k\overset{\mathrm{iid}}{\sim}N(0,1),\qquad
-R'_k=Z_k+\mathbf 1\{K=k\}d'_k\quad(k=1,\ldots,19).
+R'_k=Z_k+\mathbf{1}\{K=k\}\,d'_k\quad(k=1,\ldots,19).
 $$
 
 Only the target location gets the signal shift. Given the state, responses
@@ -71,8 +70,9 @@ P(H_k\mid\mathbf r)
 \sum_{j=0}^{19}p_jf(\mathbf r\mid H_j)}.
 $$
 
-The denominator is common to all states. Taking logs and subtracting the
-common $\ln f(\mathbf r\mid H_0)$ gives
+The denominator is common to all states, so it does not affect the ranking.
+Taking logs of the numerators and subtracting the common
+$\ln f(\mathbf r\mid H_0)$ gives the scores
 
 $$
 S_0=\ln p_0,\qquad
@@ -80,7 +80,7 @@ S_k=\ln p_k+d'_kr_k-\frac12(d'_k)^2.
 $$
 
 $$
-\widehat K=\operatorname*{arg\,max}_{k=0,\ldots,19}S_k.
+\widehat K=\underset{k\in\{0,\ldots,19\}}{\mathrm{arg\,max}}\;S_k.
 $$
 
 Under equal costs for wrong answers, selecting the most probable state
@@ -120,7 +120,7 @@ A curve fixes the prior and observer, then varies generating $e_2$.
 One generator, seed 0, is initialized before the sweep.
 
 $$
-\mathrm{SE}(\widehat A)=\sqrt{\frac{A(1-A)}{10000}}\le0.005.
+\mathrm{SE}(\widehat A)=\sqrt{A(1-A)/10000}\le0.005.
 $$
 
 Here $A$ is expected accuracy. Sampling variation can put a heuristic
